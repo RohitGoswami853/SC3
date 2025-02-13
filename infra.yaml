@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation template for setting up S3, IAM, Glue, and Lambda"
+
+Resources:
+
+  # S3 Bucket for Storing Source Code
+  SourceCodeBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: "source-code-bucket-12345"
+
+  # S3 Bucket for Storing Data
+  DataBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: "data-storage-bucket-12345"
+
+  # IAM Role for Glue and Lambda
+  GlueLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "GlueLambdaExecutionRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "glue.amazonaws.com"
+                - "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "GlueLambdaAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "s3:*"
+                  - "logs:*"
+                  - "glue:*"
+                  - "lambda:*"
+                Resource: "*"
+
+  # AWS Glue Job
+  GlueJob:
+    Type: "AWS::Glue::Job"
+    Properties:
+      Name: "MyGlueJob"
+      Role: !GetAtt GlueLambdaRole.Arn
+      Command:
+        Name: "glueetl"
+        ScriptLocation: "s3://source-code-bucket-12345/scripts/glue-job.py"
+      MaxRetries: 2
+      Timeout: 10
+      GlueVersion: "3.0"
+
+  # AWS Lambda Function
+  MyLambda:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: "TriggerGlueJob"
+      Runtime: "python3.8"
+      Handler: "lambda_function.lambda_handler"
+      Timeout: 60
+      Role: !GetAtt GlueLambdaRole.Arn
+      Code:
+        S3Bucket: "source-code-bucket-12345"
+        S3Key: "scripts/lambda_function.zip"
+      Environment:
+        Variables:
+          GLUE_JOB_NAME: "MyGlueJob"
+
+  # CloudWatch Log Group for Lambda
+  LambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: "/aws/lambda/TriggerGlueJob"
+      RetentionInDays: 7
